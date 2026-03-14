@@ -23,7 +23,7 @@
                 body: JSON.stringify({text, target_lang})
             });
             const data = await response.json();
-            document.getElementById('result').innerText = data.translated_text;
+            document.getElementById('result').innerText = data.translations[0].text;
         }
 
         function showToast(message) {

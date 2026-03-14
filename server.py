@@ -1,12 +1,20 @@
 import os
-import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from deep_translator import GoogleTranslator
 
 app = Flask(__name__)
 CORS(app)
 
-DEEPL_API_KEY = os.environ.get('DEEPL_API_KEY')
+# Normalize DeepL-style language codes to Google Translate codes
+LANGUAGE_CODE_MAP = {
+    'ZH-HANT': 'zh-TW',
+    'ZH-HANS': 'zh-CN',
+    'ZH': 'zh-TW',
+    'EN': 'en',
+    'JA': 'ja',
+    'KO': 'ko',
+}
 
 @app.route('/')
 def home():
@@ -14,38 +22,29 @@ def home():
 
 @app.route('/translate', methods=['POST', 'OPTIONS'])
 def translate():
-    """DeepL translation endpoint"""
-    
+    """Google Translate translation endpoint"""
+
     if request.method == 'OPTIONS':
         return '', 204
 
     try:
         data = request.get_json()
         text = data.get('text')
-        target_lang = data.get('target_lang', 'ZH-HANT')
+        target_lang = data.get('target_lang', 'zh-TW')
 
         if not text or not target_lang:
             return jsonify({'error': 'Invalid input'}), 400
 
-        if not DEEPL_API_KEY:
-            return jsonify({'error': 'DEEPL_API_KEY not configured'}), 500
+        target = LANGUAGE_CODE_MAP.get(target_lang.upper(), target_lang.lower())
 
-        response = requests.post(
-            'https://api-free.deepl.com/v2/translate',
-            data={
-                'auth_key': DEEPL_API_KEY,
-                'text': text,
-                'target_lang': target_lang
-            },
-            timeout=10
-        )
-        
-        response.raise_for_status()
-        translation = response.json()['translations'][0]['text']
-        return jsonify({'translations': [{'text': translation}]})
-        
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': str(e)}), 500
+        try:
+            translated = GoogleTranslator(source='auto', target=target).translate(text)
+        except Exception as e:
+            return jsonify({'error': f'Translation failed: {str(e)}'}), 502
+        return jsonify({'translations': [{'text': translated}]})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
