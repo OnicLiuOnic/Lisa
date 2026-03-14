@@ -1107,20 +1107,18 @@ const App = (() => {
         state.timerInterval = null;
     }
 
-    // --- DeepL 翻譯（透過本地代理，解決 CORS 問題） ---
+    // --- DeepL 翻譯（透過後端代理，解決 CORS 問題） ---
     async function translateText(text) {
         if (!text.trim()) return;
 
         dom.liveTranslated.innerHTML = '<span class="translating">翻譯中...</span>';
 
         try {
-            const response = await fetch('/api/translate', {
+            const response = await fetch('/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    api_key: state.deeplApiKey,
-                    text: [text],
-                    source_lang: 'EN',
+                    text: text,
                     target_lang: 'ZH-HANT',
                 }),
             });
@@ -1163,13 +1161,11 @@ const App = (() => {
         if (!text.trim() || !state.isRecording) return;
 
         try {
-            const response = await fetch('/api/translate', {
+            const response = await fetch('/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    api_key: state.deeplApiKey,
-                    text: [text],
-                    source_lang: 'EN',
+                    text: text,
                     target_lang: 'ZH-HANT',
                 }),
             });
