@@ -1,56 +1,1400 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-    <title>Lisa - UI</title>
-    <script>
-        const API_BASE = 'https://lisa-production-2f51.up.railway.app';
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>即時翻譯錄音 — Live Translator</title>
+    <meta name="description" content="iPhone Safari 即時英文語音翻譯為繁體中文，支援會議紀錄儲存與摘要匯出">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================
+   設計方向：Industrial-Minimal Dark
+   色彩：深靛藍底 + 琥珀色強調 + 霧灰中性
+   字型：Space Grotesk (English) / Noto Sans TC (中文)
+   ============================ */
 
-        async function checkBackendHealth() {
-            const response = await fetch(`${API_BASE}/`);
-            if (response.ok) {
-                showToast('Backend is healthy!');
-            } else {
-                showToast('Backend is down!');
-            }
-        }
+:root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a2035;
+    --bg-card-hover: #1f2847;
+    --border: #2a3250;
+    --border-active: #f59e0b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #f59e0b;
+    --accent-glow: rgba(245, 158, 11, 0.15);
+    --accent-soft: #fbbf24;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --danger-glow: rgba(239, 68, 68, 0.2);
+    --info: #3b82f6;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-        async function translate() {
-            const text = document.getElementById('text').value;
-            const target_lang = 'ZH-HANT';
-            const response = await fetch(`${API_BASE}/translate`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text, target_lang})
-            });
-            const data = await response.json();
-            document.getElementById('result').innerText = data.translated_text;
-        }
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        function showToast(message) {
-            const toast = document.createElement('div');
-            toast.innerText = message;
-            toast.className = 'toast';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-    </script>
+html, body {
+    height: 100%;
+    font-family: 'Noto Sans TC', 'Space Grotesk', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* 微妙的網格底紋 */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+        linear-gradient(rgba(245, 158, 11, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245, 158, 11, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ===== 全局佈局 ===== */
+.app-container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh; /* iPhone 動態視口高度 */
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+/* ===== 頂部標題列 ===== */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0 12px;
+    flex-shrink: 0;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-logo {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent) 0%, #d97706 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--bg-primary);
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -1px;
+}
+
+.header-title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+}
+
+.header-title span {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 13px;
+    margin-left: 6px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-size: 16px;
+}
+
+.icon-btn:hover, .icon-btn:active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+}
+
+/* ===== 狀態列 ===== */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    flex-shrink: 0;
+    transition: all var(--transition);
+}
+
+.status-bar.recording {
+    border-color: var(--danger);
+    background: var(--danger-glow);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+    transition: background var(--transition);
+}
+
+.status-bar.recording .status-dot {
+    background: var(--danger);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+    50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.status-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex: 1;
+    font-family: 'Space Grotesk', 'Noto Sans TC', sans-serif;
+}
+
+.status-bar.recording .status-text {
+    color: var(--danger);
+    font-weight: 500;
+}
+
+.status-timer {
+    font-size: 13px;
+    font-family: 'Space Grotesk', monospace;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+}
+
+/* ===== 即時翻譯字幕區 ===== */
+.live-area {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color var(--transition);
+}
+
+.live-area.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--accent-glow);
+}
+
+.live-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+}
+
+.live-original {
+    font-size: 14px;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-primary);
+    line-height: 1.5;
+    min-height: 22px;
+}
+
+.live-original .interim {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.live-divider {
+    height: 1px;
+    background: var(--border);
+}
+
+.live-translated {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--accent-soft);
+    line-height: 1.5;
+    min-height: 24px;
+}
+
+.live-translated .translating {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+/* ===== 歷史記錄區 ===== */
+.history-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    margin-bottom: 12px;
+}
+
+.history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.history-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.history-count {
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-family: 'Space Grotesk', monospace;
+}
+
+.history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.history-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.history-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    font-size: 14px;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-empty-icon {
+    font-size: 32px;
+    opacity: 0.3;
+}
+
+.history-item {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 3px;
+    background: var(--bg-card);
+    border: 1px solid transparent;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.history-item:hover {
+    border-color: var(--border);
+}
+
+/* 删除按鈕：hover 時顯示 */
+.history-item-del {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.history-item:hover .history-item-del {
+    opacity: 1;
+}
+
+.history-item-del:hover {
+    background: var(--danger-glow);
+    color: var(--danger);
+}
+
+/* 刪除滑動動畫：帶加速感 */
+.history-item.removing {
+    animation: slideRemove 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes slideRemove {
+    0%   { max-height: 80px; opacity: 1; transform: translateX(0); }
+    40%  { opacity: 0.5; transform: translateX(30px); }
+    100% { max-height: 0; opacity: 0; transform: translateX(60px); margin-bottom: 0; padding: 0 10px; }
+}
+
+.history-item-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'Space Grotesk', monospace;
+    margin-left: 6px;
+}
+
+.history-item-en {
+    font-size: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 2px;
+    padding-right: 24px;
+}
+
+.history-item-zh {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* ===== 底部控制列 ===== */
+.controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px 0 20px;
+    flex-shrink: 0;
+}
+
+.btn-record {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    position: relative;
+}
+
+.btn-record::before {
+    content: '';
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-record.recording {
+    border-color: var(--danger);
+}
+
+.btn-record.recording::before {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--danger);
+}
+
+.btn-record:active {
+    transform: scale(0.92);
+}
+
+/* 錄音時的脈搏效果 */
+.btn-record.recording::after {
+    content: '';
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid var(--danger);
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+
+.btn-secondary {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all var(--transition);
+}
+
+.btn-secondary:hover, .btn-secondary:active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+}
+
+.btn-secondary:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* ===== 設定面板 ===== */
+.panel-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.panel-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    padding: 20px;
+    max-height: 85vh;
+    overflow-y: auto;
+    z-index: 101;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-overlay.open .panel {
+    transform: translateY(0);
+}
+
+.panel-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    margin: 0 auto 20px;
+}
+
+.panel-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.field-group {
+    margin-bottom: 20px;
+}
+
+.field-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.field-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: 'Space Grotesk', monospace;
+    transition: border-color var(--transition);
+    outline: none;
+}
+
+.field-input:focus {
+    border-color: var(--accent);
+}
+
+.field-input::placeholder {
+    color: var(--text-muted);
+}
+
+.field-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.5;
+}
+
+.btn-save {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--accent);
+    color: var(--bg-primary);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: 'Noto Sans TC', sans-serif;
+}
+
+.btn-save:hover {
+    background: var(--accent-soft);
+}
+
+/* ===== 摘要面板 ===== */
+.summary-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.summary-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.summary-actions button {
+    flex: 1;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: 'Noto Sans TC', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.summary-actions button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.summary-actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* ===== Toast ===== */
+.toast {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--bg-card);
+    border: 1px solid var(--success);
+    color: var(--success);
+    padding: 10px 20px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 200;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ===== 安全區域（iPhone 瀏海/Home Bar） ===== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .controls {
+        padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+}
+
+/* ===== 螢幕寬度適應 ===== */
+@media (min-width: 601px) {
+    .app-container { padding: 0 24px; }
+}
+</style>
 </head>
 <body>
-    <h1>Welcome to Lisa</h1>
-    <input id="text" type="text" placeholder="Enter text">
-    <button onclick="translate()">Translate</button>
-    <button onclick="checkBackendHealth()">Check Health</button>
-    <p id="result"></p>
-    <style>
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: black;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
+
+<div class="app-container">
+    <!-- 頂部標題列 -->
+    <header class="header">
+        <div class="header-brand">
+            <div class="header-logo">LT</div>
+            <h1 class="header-title">即時翻譯<span>EN → 中文</span></h1>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" id="btnSummary" title="會議摘要" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </button>
+            <button class="icon-btn" id="btnSettings" title="設定">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- 狀態列 -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-dot"></div>
+        <span class="status-text" id="statusText">準備就緒 — 點擊下方按鈕開始翻譯</span>
+        <span class="status-timer" id="statusTimer"></span>
+    </div>
+
+    <!-- 即時翻譯字幕區 -->
+    <div class="live-area" id="liveArea">
+        <div class="live-label">即時辨識 LIVE</div>
+        <div class="live-original" id="liveOriginal">
+            <span class="interim">等待語音輸入...</span>
+        </div>
+        <div class="live-divider"></div>
+        <div class="live-translated" id="liveTranslated">
+            <span class="translating">翻譯將顯示在這裡</span>
+        </div>
+    </div>
+
+    <!-- 歷史記錄區 -->
+    <div class="history-section">
+        <div class="history-header">
+            <div class="history-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                會議記錄
+                <span class="history-count" id="historyCount">0</span>
+            </div>
+            <button class="icon-btn" id="btnClearHistory" title="清除記錄" style="width:30px;height:30px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+        </div>
+        <div class="history-list" id="historyList">
+            <div class="history-empty" id="historyEmpty">
+                <div class="history-empty-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                開始錄音後，翻譯記錄將顯示在這裡
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部控制列 -->
+    <div class="controls">
+        <button class="btn-secondary" id="btnSummaryBottom" title="生成會議摘要" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </button>
+        <button class="btn-record" id="btnRecord" title="開始 / 停止錄音">
+        </button>
+        <button class="btn-secondary" id="btnExport" title="匯出記錄" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- 設定面板 -->
+<div class="panel-overlay" id="settingsPanel">
+    <div class="panel">
+        <div class="panel-handle"></div>
+        <h2 class="panel-title">⚙ API 設定</h2>
+        <div class="field-group">
+            <label class="field-label" for="inputDeeplKey">DeepL API Key</label>
+            <input class="field-input" id="inputDeeplKey" type="password" placeholder="貼上您的 DeepL API Key...">
+            <div class="field-hint">
+                免費申請：<a href="https://www.deepl.com/pro-api" target="_blank" style="color:var(--accent)">deepl.com/pro-api</a>
+                <br>API Key 僅存儲於本機瀏覽器，不會上傳至任何伺服器。
+            </div>
+        </div>
+        <button class="btn-save" id="btnSaveSettings">儲存設定</button>
+    </div>
+</div>
+
+<!-- 摘要面板 -->
+<div class="panel-overlay" id="summaryPanel">
+    <div class="panel">
+        <div class="panel-handle"></div>
+        <h2 class="panel-title">📋 會議摘要</h2>
+        <div class="summary-content" id="summaryContent">尚無會議記錄</div>
+        <div class="summary-actions">
+            <button id="btnCopySummary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                複製
+            </button>
+            <button id="btnDownloadSummary" class="primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                下載 TXT
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast 通知 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================
+// 即時翻譯錄音 — 核心邏輯
+// ============================
+
+const App = (() => {
+    'use strict';
+
+    // --- 狀態管理 ---
+    const state = {
+        isRecording: false,
+        recognition: null,
+        timerInterval: null,
+        startTime: null,
+        records: [],           // 會議記錄陣列
+        deeplApiKey: '',
+        translateTimer: null,  // 防抖動計時器
+        lastInterim: '',       // 暫存辨識中的文字
+        finalBuffer: '',       // 累積確定片段，等停頓後批次翻譯
+        batchTimer: null,      // 停頓偵測計時器
+    };
+
+    // --- DOM 參照 ---
+    const $ = (sel) => document.querySelector(sel);
+    const dom = {};
+
+    // --- 初始化 ---
+    function init() {
+        // 快取 DOM 元素
+        dom.btnRecord = $('#btnRecord');
+        dom.btnSettings = $('#btnSettings');
+        dom.btnSummary = $('#btnSummary');
+        dom.btnSummaryBottom = $('#btnSummaryBottom');
+        dom.btnExport = $('#btnExport');
+        dom.btnClearHistory = $('#btnClearHistory');
+        dom.btnSaveSettings = $('#btnSaveSettings');
+        dom.btnCopySummary = $('#btnCopySummary');
+        dom.btnDownloadSummary = $('#btnDownloadSummary');
+        dom.statusBar = $('#statusBar');
+        dom.statusText = $('#statusText');
+        dom.statusTimer = $('#statusTimer');
+        dom.liveArea = $('#liveArea');
+        dom.liveOriginal = $('#liveOriginal');
+        dom.liveTranslated = $('#liveTranslated');
+        dom.historyList = $('#historyList');
+        dom.historyCount = $('#historyCount');
+        dom.historyEmpty = $('#historyEmpty');
+        dom.settingsPanel = $('#settingsPanel');
+        dom.summaryPanel = $('#summaryPanel');
+        dom.summaryContent = $('#summaryContent');
+        dom.inputDeeplKey = $('#inputDeeplKey');
+        dom.toast = $('#toast');
+
+        // 載入已儲存的設定和記錄
+        loadSettings();
+        loadRecords();
+        updateUI();
+
+        // 綁定事件
+        dom.btnRecord.addEventListener('click', toggleRecording);
+        dom.btnSettings.addEventListener('click', () => openPanel('settings'));
+        dom.btnSummary.addEventListener('click', () => generateSummary());
+        dom.btnSummaryBottom.addEventListener('click', () => generateSummary());
+        dom.btnExport.addEventListener('click', exportRecords);
+        dom.btnClearHistory.addEventListener('click', clearHistory);
+        dom.btnSaveSettings.addEventListener('click', saveSettings);
+        dom.btnCopySummary.addEventListener('click', copySummary);
+        dom.btnDownloadSummary.addEventListener('click', downloadSummary);
+
+        // 面板關閉：點擊遮罩
+        dom.settingsPanel.addEventListener('click', (e) => {
+            if (e.target === dom.settingsPanel) closeAllPanels();
+        });
+        dom.summaryPanel.addEventListener('click', (e) => {
+            if (e.target === dom.summaryPanel) closeAllPanels();
+        });
+
+        // 檢查是否已設定 API Key
+        if (!state.deeplApiKey) {
+            setTimeout(() => openPanel('settings'), 500);
         }
-    </style>
+    }
+
+    // --- 設定存取 ---
+    function loadSettings() {
+        state.deeplApiKey = localStorage.getItem('deepl_api_key') || '';
+        dom.inputDeeplKey && (dom.inputDeeplKey.value = state.deeplApiKey);
+    }
+
+    function saveSettings() {
+        const key = dom.inputDeeplKey.value.trim();
+        if (!key) {
+            showToast('請輸入 DeepL API Key', 'warning');
+            return;
+        }
+        state.deeplApiKey = key;
+        localStorage.setItem('deepl_api_key', key);
+        closeAllPanels();
+        showToast('✓ API Key 已儲存');
+    }
+
+    // --- 會議記錄存取 ---
+    function loadRecords() {
+        try {
+            const saved = localStorage.getItem('meeting_records');
+            state.records = saved ? JSON.parse(saved) : [];
+        } catch {
+            state.records = [];
+        }
+    }
+
+    function saveRecords() {
+        localStorage.setItem('meeting_records', JSON.stringify(state.records));
+    }
+
+    function addRecord(en, zh) {
+        const record = {
+            time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            en: en.trim(),
+            zh: zh.trim(),
+        };
+        state.records.push(record);
+        saveRecords();
+        renderHistory();
+        updateUI();
+    }
+
+    // --- 語音辨識 ---
+    function toggleRecording() {
+        if (state.isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    }
+
+    function startRecording() {
+        // 檢查 API Key
+        if (!state.deeplApiKey) {
+            openPanel('settings');
+            showToast('請先設定 DeepL API Key');
+            return;
+        }
+
+        // 檢查瀏覽器支援
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            showToast('此瀏覽器不支援語音辨識', 'error');
+            return;
+        }
+
+        state.recognition = new SpeechRecognition();
+        state.recognition.lang = 'en-US';
+        state.recognition.continuous = true;
+        state.recognition.interimResults = true;
+        state.recognition.maxAlternatives = 1;
+
+        state.recognition.onstart = () => {
+            state.isRecording = true;
+            state.startTime = Date.now();
+            startTimer();
+            dom.btnRecord.classList.add('recording');
+            dom.statusBar.classList.add('recording');
+            dom.liveArea.classList.add('active');
+            dom.statusText.textContent = 'REC — 正在聆聽英文語音...';
+            dom.liveOriginal.innerHTML = '<span class="interim">Listening...</span>';
+            dom.liveTranslated.innerHTML = '<span class="translating">等待翻譯...</span>';
+        };
+
+        state.recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+
+            // 確定結果：累積到 buffer，等停頓或超過長度後批次翻譯
+            if (finalTranscript) {
+                state.finalBuffer += (state.finalBuffer ? ' ' : '') + finalTranscript;
+                // 即時顯示累積的文字
+                dom.liveOriginal.innerHTML = escapeHtml(state.finalBuffer);
+                dom.liveTranslated.innerHTML = '<span class="translating">累積中，稍後翻譯...</span>';
+
+                // 若累積超過 150 字元，不等停頓直接送出翻譯
+                if (state.finalBuffer.length > 150) {
+                    clearTimeout(state.batchTimer);
+                    const textToTranslate = state.finalBuffer.trim();
+                    state.finalBuffer = '';
+                    translateText(textToTranslate);
+                    return;
+                }
+
+                // 重置停頓偵測計時器（每次有新片段進來就重計 2 秒）
+                clearTimeout(state.batchTimer);
+                state.batchTimer = setTimeout(() => {
+                    if (state.finalBuffer.trim()) {
+                        const textToTranslate = state.finalBuffer.trim();
+                        state.finalBuffer = '';
+                        translateText(textToTranslate);
+                    }
+                }, 2000);
+            }
+
+            // 暫定結果：顯示累積文字 + 進行中的文字
+            if (interimTranscript) {
+                const display = state.finalBuffer
+                    ? state.finalBuffer + ' ' + interimTranscript
+                    : interimTranscript;
+                dom.liveOriginal.innerHTML = escapeHtml(display) +
+                    ' <span class="interim">...</span>';
+                // 防抖動翻譯暫定結果（即時預覽）
+                debouncedTranslate(display);
+            }
+        };
+
+        state.recognition.onerror = (event) => {
+            console.warn('語音辨識錯誤:', event.error);
+            if (event.error === 'no-speech') {
+                // 無語音輸入，自動重啟
+                dom.statusText.textContent = 'REC — 未偵測到語音，持續聆聽中...';
+            } else if (event.error === 'not-allowed') {
+                stopRecording();
+                showToast('麥克風權限被拒絕，請在設定中開啟', 'error');
+            }
+        };
+
+        state.recognition.onend = () => {
+            // 若仍在錄音狀態，自動重啟（Safari 會中斷連線）
+            if (state.isRecording) {
+                try {
+                    state.recognition.start();
+                } catch (e) {
+                    console.warn('重啟辨識失敗:', e);
+                    stopRecording();
+                }
+            }
+        };
+
+        try {
+            state.recognition.start();
+        } catch (e) {
+            showToast('無法啟動語音辨識: ' + e.message, 'error');
+        }
+    }
+
+    function stopRecording() {
+        state.isRecording = false;
+
+        // 停止前先把 buffer 裡殘餘的文字送出翻譯
+        clearTimeout(state.batchTimer);
+        if (state.finalBuffer.trim()) {
+            const remaining = state.finalBuffer.trim();
+            state.finalBuffer = '';
+            translateText(remaining);
+        }
+
+        if (state.recognition) {
+            state.recognition.stop();
+            state.recognition = null;
+        }
+        stopTimer();
+        dom.btnRecord.classList.remove('recording');
+        dom.statusBar.classList.remove('recording');
+        dom.liveArea.classList.remove('active');
+        dom.statusText.textContent = '已停止 — 點擊按鈕重新開始';
+    }
+
+    // --- 計時器 ---
+    function startTimer() {
+        state.timerInterval = setInterval(() => {
+            const elapsed = Date.now() - state.startTime;
+            const mins = Math.floor(elapsed / 60000);
+            const secs = Math.floor((elapsed % 60000) / 1000);
+            dom.statusTimer.textContent =
+                `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+
+    // --- DeepL 翻譯（透過本地代理，解決 CORS 問題） ---
+    async function translateText(text) {
+        if (!text.trim()) return;
+
+        dom.liveTranslated.innerHTML = '<span class="translating">翻譯中...</span>';
+
+        try {
+            const response = await fetch('/api/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: state.deeplApiKey,
+                    text: [text],
+                    source_lang: 'EN',
+                    target_lang: 'ZH-HANT',
+                }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = response.status === 403
+                    ? 'API Key 無效' : response.status === 456
+                    ? '翻譯額度已用完' : errData.error || `HTTP ${response.status}`;
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            const translated = data.translations[0].text;
+
+            dom.liveTranslated.textContent = translated;
+
+            // 將確定結果加入歷史記錄
+            addRecord(text, translated);
+
+        } catch (err) {
+            console.error('翻譯錯誤:', err);
+            dom.liveTranslated.innerHTML = `<span class="translating">翻譯失敗: ${escapeHtml(err.message)}</span>`;
+            if (err.message === 'API Key 無效') {
+                showToast('DeepL API Key 無效，請重新設定', 'error');
+            }
+        }
+    }
+
+    // 防抖動翻譯（暫定結果用，減少 API 呼叫）
+    function debouncedTranslate(text) {
+        clearTimeout(state.translateTimer);
+        state.translateTimer = setTimeout(() => {
+            // 只做即時預覽，不加入歷史記錄
+            previewTranslate(text);
+        }, 800);
+    }
+
+    async function previewTranslate(text) {
+        if (!text.trim() || !state.isRecording) return;
+
+        try {
+            const response = await fetch('/api/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: state.deeplApiKey,
+                    text: [text],
+                    source_lang: 'EN',
+                    target_lang: 'ZH-HANT',
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                dom.liveTranslated.innerHTML =
+                    `<span class="translating">${escapeHtml(data.translations[0].text)}</span>`;
+            }
+        } catch {
+            // 預覽翻譯失敗不顯示錯誤
+        }
+    }
+
+    // --- 歷史記錄渲染 ---
+
+    // 建立單筆記錄 DOM 節點
+    function createHistoryItem(record, index) {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.dataset.index = index;
+        item.innerHTML = `
+            <button class="history-item-del" title="刪除這筆">×</button>
+            <div class="history-item-en">${escapeHtml(record.en)} <span class="history-item-time">[${escapeHtml(record.time)}]</span></div>
+            <div class="history-item-zh">${escapeHtml(record.zh)}</div>
+        `;
+        // 綁定單筆刪除事件
+        item.querySelector('.history-item-del').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteRecord(item);
+        });
+        return item;
+    }
+
+    function renderHistory() {
+        if (state.records.length === 0) {
+            dom.historyEmpty.style.display = 'flex';
+            dom.historyCount.textContent = '0';
+            return;
+        }
+
+        dom.historyEmpty.style.display = 'none';
+        dom.historyCount.textContent = state.records.length;
+
+        // 只新增最後一筆，插入最頂部
+        const record = state.records[state.records.length - 1];
+        const item = createHistoryItem(record, state.records.length - 1);
+        dom.historyList.insertBefore(item, dom.historyList.firstChild);
+        dom.historyList.scrollTop = 0;
+    }
+
+    function renderAllHistory() {
+        // 清空所有記錄節點
+        const items = dom.historyList.querySelectorAll('div[class="history-item"]');
+        items.forEach(el => el.remove());
+
+        if (state.records.length === 0) {
+            dom.historyEmpty.style.display = 'flex';
+            dom.historyCount.textContent = '0';
+            return;
+        }
+
+        dom.historyEmpty.style.display = 'none';
+        dom.historyCount.textContent = state.records.length;
+
+        // 反轉順序：最新的在最上面
+        for (let i = state.records.length - 1; i >= 0; i--) {
+            const item = createHistoryItem(state.records[i], i);
+            dom.historyList.appendChild(item);
+        }
+    }
+
+    // --- 單筆刪除（帶加速感滑動動畫） ---
+    function deleteRecord(itemEl) {
+        const index = parseInt(itemEl.dataset.index, 10);
+        // 播放滑動移除動畫
+        itemEl.classList.add('removing');
+        itemEl.addEventListener('animationend', () => {
+            // 從資料陣列刪除
+            state.records.splice(index, 1);
+            saveRecords();
+            // 重新渲染（更新 index）
+            renderAllHistory();
+            updateUI();
+        }, { once: true });
+    }
+
+    // --- UI 狀態更新 ---
+    function updateUI() {
+        const hasRecords = state.records.length > 0;
+        dom.btnSummary.disabled = !hasRecords;
+        dom.btnSummaryBottom.disabled = !hasRecords;
+        dom.btnExport.disabled = !hasRecords;
+    }
+
+    // --- 會議摘要 ---
+    function generateSummary() {
+        if (state.records.length === 0) return;
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('zh-TW', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        const timeRange = state.records.length > 0
+            ? `${state.records[0].time} ~ ${state.records[state.records.length - 1].time}`
+            : '';
+
+        let summary = `📋 會議翻譯紀錄\n`;
+        summary += `━━━━━━━━━━━━━━━━━━━━\n`;
+        summary += `日期：${dateStr}\n`;
+        summary += `時段：${timeRange}\n`;
+        summary += `段落數：${state.records.length}\n`;
+        summary += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        state.records.forEach((record, i) => {
+            summary += `[${record.time}]\n`;
+            summary += `EN: ${record.en}\n`;
+            summary += `中: ${record.zh}\n`;
+            if (i < state.records.length - 1) summary += `\n`;
+        });
+
+        summary += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+        summary += `由「即時翻譯錄音」自動產生`;
+
+        dom.summaryContent.textContent = summary;
+        openPanel('summary');
+    }
+
+    // --- 匯出 ---
+    function exportRecords() {
+        generateSummary(); // 從摘要面板匯出
+    }
+
+    function copySummary() {
+        const text = dom.summaryContent.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('✓ 已複製到剪貼簿');
+        }).catch(() => {
+            // iOS Safari fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast('✓ 已複製到剪貼簿');
+        });
+    }
+
+    function downloadSummary() {
+        const text = dom.summaryContent.textContent;
+        const now = new Date();
+        const fileName = `會議紀錄_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
+
+        // 使用 BOM 確保中文正確顯示
+        const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('✓ 已下載 ' + fileName);
+    }
+
+    // --- 清除全部記錄 ---
+    function clearHistory() {
+        if (state.records.length === 0) return;
+        if (!confirm('確定要清除所有會議記錄嗎？')) return;
+        state.records = [];
+        saveRecords();
+        // 清除所有記錄 DOM
+        const all = dom.historyList.querySelectorAll('div[class^="history-item"]');
+        all.forEach(el => { if (!el.id) el.remove(); });
+        dom.historyEmpty.style.display = 'flex';
+        dom.historyCount.textContent = '0';
+        updateUI();
+        showToast('✓ 記錄已清除');
+    }
+
+    // --- 面板控制 ---
+    function openPanel(type) {
+        if (type === 'settings') {
+            dom.inputDeeplKey.value = state.deeplApiKey;
+            dom.settingsPanel.classList.add('open');
+        } else if (type === 'summary') {
+            dom.summaryPanel.classList.add('open');
+        }
+    }
+
+    function closeAllPanels() {
+        dom.settingsPanel.classList.remove('open');
+        dom.summaryPanel.classList.remove('open');
+    }
+
+    // --- Toast 通知 ---
+    function showToast(message, type = 'success') {
+        dom.toast.textContent = message;
+        dom.toast.style.borderColor = type === 'error' ? 'var(--danger)' :
+            type === 'warning' ? 'var(--accent)' : 'var(--success)';
+        dom.toast.style.color = type === 'error' ? 'var(--danger)' :
+            type === 'warning' ? 'var(--accent)' : 'var(--success)';
+        dom.toast.classList.add('show');
+        setTimeout(() => dom.toast.classList.remove('show'), 2500);
+    }
+
+    // --- 工具函式 ---
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // --- 啟動 ---
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+        renderAllHistory();
+    });
+
+    return { state };
+})();
+</script>
 </body>
 </html>
