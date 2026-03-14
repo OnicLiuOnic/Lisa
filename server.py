@@ -15,7 +15,7 @@ def home():
 @app.route('/translate', methods=['POST', 'OPTIONS'])
 def translate():
     """DeepL translation endpoint"""
-    
+
     if request.method == 'OPTIONS':
         return '', 204
 
@@ -39,11 +39,11 @@ def translate():
             },
             timeout=10
         )
-        
+
         response.raise_for_status()
         translation = response.json()['translations'][0]['text']
         return jsonify({'translations': [{'text': translation}]})
-        
+
     except requests.exceptions.RequestException as e:
         return jsonify({'error': str(e)}), 500
 
