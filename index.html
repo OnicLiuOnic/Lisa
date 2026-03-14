@@ -1,30 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Translation App</title>
+    <title>Lisa - UI</title>
     <script>
         const API_BASE = 'https://lisa-production-2f51.up.railway.app';
 
-        async function fetchTranslation() {
+        async function checkBackendHealth() {
+            const response = await fetch(`${API_BASE}/`);
+            if (response.ok) {
+                showToast('Backend is healthy!');
+            } else {
+                showToast('Backend is down!');
+            }
+        }
+
+        async function translate() {
+            const text = document.getElementById('text').value;
+            const target_lang = 'ZH-HANT';
             const response = await fetch(`${API_BASE}/translate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: document.getElementById('inputText').value,
-                    target_lang: 'ZH-HANT'
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text, target_lang})
             });
             const data = await response.json();
-            document.getElementById('outputText').value = (data.translations && data.translations[0] && data.translations[0].text) ? data.translations[0].text : '';
+            document.getElementById('result').innerText = data.translated_text;
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.innerText = message;
+            toast.className = 'toast';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
     </script>
 </head>
 <body>
-    <h1>Translation</h1>
-    <textarea id="inputText" placeholder="Enter English text..."></textarea>
-    <button onclick="fetchTranslation()">Translate</button>
-    <textarea id="outputText" placeholder="Translated text..." readonly></textarea>
+    <h1>Welcome to Lisa</h1>
+    <input id="text" type="text" placeholder="Enter text">
+    <button onclick="translate()">Translate</button>
+    <button onclick="checkBackendHealth()">Check Health</button>
+    <p id="result"></p>
+    <style>
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: black;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
 </body>
 </html>
