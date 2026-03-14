@@ -1,5 +1,5 @@
 """
-即時翻譯錄音 — Cloudflare Workers 後端
+Online Translator — Cloudflare Workers 後端
 功能：DeepL API 代理（解決 CORS 問題）
 部署：透過 wrangler.toml 部署至 Cloudflare Workers
 """
