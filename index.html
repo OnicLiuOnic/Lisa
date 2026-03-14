@@ -5,24 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Translation App</title>
     <script>
+        const API_BASE = 'https://lisa-production-2f51.up.railway.app';
+
         async function fetchTranslation() {
-            const response = await fetch('https://lisa-production-2f51.up.railway.app/translate', {
+            const response = await fetch(`${API_BASE}/translate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: document.getElementById('inputText').value,
-                    source_lang: 'EN',
                     target_lang: 'ZH-HANT'
                 })
             });
             const data = await response.json();
-            // handle translation result
+            document.getElementById('outputText').value = (data.translations && data.translations[0] && data.translations[0].text) ? data.translations[0].text : '';
         }
     </script>
 </head>
 <body>
     <h1>Translation</h1>
-    <textarea id="inputText"></textarea>
+    <textarea id="inputText" placeholder="Enter English text..."></textarea>
     <button onclick="fetchTranslation()">Translate</button>
+    <textarea id="outputText" placeholder="Translated text..." readonly></textarea>
 </body>
 </html>
