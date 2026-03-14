@@ -1,0 +1,6 @@
+name = "001-backend"
+main = "server.py"
+compatibility_date = "2024-03-14"
+
+[python_worker]
+enabled = true
