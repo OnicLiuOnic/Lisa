@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資複利計算機</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 24px 16px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 700px) {
+            .container { grid-template-columns: 1fr; }
+            h1 { font-size: 1.5rem; }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #00d4ff;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .field { margin-bottom: 18px; }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        select option { background: #1a1a2e; }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            padding: 0;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            accent-color: #00d4ff;
+        }
+
+        .slider-val {
+            min-width: 52px;
+            text-align: right;
+            font-weight: 600;
+            color: #00d4ff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 8px;
+            letter-spacing: 0.03em;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+        .btn:active { transform: scale(0.98); }
+
+        /* Results */
+        .results-card {
+            grid-column: 1 / -1;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        @media (max-width: 500px) {
+            .summary-grid { grid-template-columns: 1fr; }
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .stat-value.green { color: #00e676; }
+        .stat-value.blue  { color: #00d4ff; }
+        .stat-value.purple { color: #bf7af7; }
+
+        /* Bar chart */
+        canvas {
+            width: 100%;
+            height: 220px;
+            border-radius: 10px;
+            display: block;
+            margin-bottom: 24px;
+        }
+
+        /* Table */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 10px 14px;
+            text-align: right;
+            color: #00d4ff;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        th:first-child { text-align: center; }
+
+        td {
+            padding: 9px 14px;
+            text-align: right;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            color: #ccc;
+            white-space: nowrap;
+        }
+
+        td:first-child { text-align: center; color: #888; }
+
+        tr:hover td { background: rgba(255,255,255,0.03); }
+
+        .hidden { display: none; }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.82rem;
+            color: #aaa;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>投資複利計算機</h1>
+<p class="subtitle">複利是世界第八大奇蹟。了解它的人賺它，不了解它的人付它。</p>
+
+<div class="container">
+
+    <!-- Input card -->
+    <div class="card">
+        <div class="card-title">投資設定</div>
+
+        <div class="field">
+            <label>初始投資金額（NT$）</label>
+            <input type="number" id="principal" value="100000" min="0" step="1000">
+        </div>
+
+        <div class="field">
+            <label>每月定期投入（NT$）</label>
+            <input type="number" id="monthly" value="5000" min="0" step="500">
+        </div>
+
+        <div class="field">
+            <label>年利率（%）</label>
+            <div class="slider-row">
+                <input type="range" id="rateSlider" min="0.1" max="30" step="0.1" value="8"
+                    oninput="syncSlider('rate','rateSlider','%')">
+                <input type="number" id="rate" value="8" min="0.1" max="100" step="0.1"
+                    oninput="syncInput('rate','rateSlider')" style="max-width:90px">
+            </div>
+        </div>
+
+        <div class="field">
+            <label>投資年限</label>
+            <div class="slider-row">
+                <input type="range" id="yearsSlider" min="1" max="50" step="1" value="20"
+                    oninput="syncSlider('years','yearsSlider','年')">
+                <input type="number" id="years" value="20" min="1" max="50" step="1"
+                    oninput="syncInput('years','yearsSlider')" style="max-width:90px">
+            </div>
+        </div>
+
+        <div class="field">
+            <label>複利頻率</label>
+            <select id="freq">
+                <option value="1">每年複利</option>
+                <option value="2">每半年複利</option>
+                <option value="4">每季複利</option>
+                <option value="12" selected>每月複利</option>
+                <option value="365">每日複利</option>
+            </select>
+        </div>
+
+        <button class="btn" onclick="calculate()">計算</button>
+    </div>
+
+    <!-- Info card -->
+    <div class="card">
+        <div class="card-title">公式說明</div>
+
+        <p style="font-size:0.85rem;color:#aaa;line-height:1.8;margin-bottom:16px">
+            複利計算公式：
+        </p>
+        <div style="background:rgba(0,212,255,0.06);border-radius:10px;padding:14px;font-family:monospace;font-size:0.88rem;color:#00d4ff;margin-bottom:18px;line-height:2">
+            A = P × (1 + r/n)<sup>nt</sup><br>
+            + PMT × [(1 + r/n)<sup>nt</sup> − 1] / (r/n)
+        </div>
+
+        <div style="font-size:0.82rem;color:#888;line-height:2">
+            <span style="color:#e0e0e0">A</span> — 最終金額<br>
+            <span style="color:#e0e0e0">P</span> — 初始本金<br>
+            <span style="color:#e0e0e0">r</span> — 年利率（小數）<br>
+            <span style="color:#e0e0e0">n</span> — 每年複利次數<br>
+            <span style="color:#e0e0e0">t</span> — 年數<br>
+            <span style="color:#e0e0e0">PMT</span> — 每期定期投入
+        </div>
+
+        <div style="margin-top:20px;padding:14px;background:rgba(123,47,247,0.1);border-radius:10px;border-left:3px solid #7b2ff7">
+            <div style="font-size:0.8rem;color:#bf7af7;margin-bottom:4px">投資建議</div>
+            <div style="font-size:0.82rem;color:#aaa;line-height:1.7">
+                定期定額能平滑市場波動，搭配長期複利效果，是穩健累積財富的核心策略。
+            </div>
+        </div>
+    </div>
+
+    <!-- Results (hidden until calculated) -->
+    <div class="card results-card hidden" id="results">
+        <div class="card-title">計算結果</div>
+
+        <div class="summary-grid">
+            <div class="stat-box">
+                <div class="stat-label">最終資產</div>
+                <div class="stat-value blue" id="finalAmount">—</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">總投入本金</div>
+                <div class="stat-value purple" id="totalPrincipal">—</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">複利收益</div>
+                <div class="stat-value green" id="totalInterest">—</div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background:#7b2ff7"></div> 累計本金
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background:#00d4ff"></div> 累計利息
+            </div>
+        </div>
+
+        <canvas id="chart"></canvas>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>年份</th>
+                        <th>年初資產</th>
+                        <th>本年投入</th>
+                        <th>本年利息</th>
+                        <th>累計本金</th>
+                        <th>累計利息</th>
+                        <th>年末總資產</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function fmt(n) {
+        return 'NT$ ' + Math.round(n).toLocaleString('zh-TW');
+    }
+
+    function syncSlider(inputId, sliderId) {
+        document.getElementById(sliderId).value = document.getElementById(inputId).value;
+    }
+
+    function syncInput(inputId, sliderId) {
+        document.getElementById(inputId).value = document.getElementById(sliderId).value;
+    }
+
+    function calculate() {
+        const P = parseFloat(document.getElementById('principal').value) || 0;
+        const pmt = parseFloat(document.getElementById('monthly').value) || 0;
+        const r = (parseFloat(document.getElementById('rate').value) || 0) / 100;
+        const t = parseInt(document.getElementById('years').value) || 1;
+        const n = parseInt(document.getElementById('freq').value);
+
+        const rows = [];
+        let balance = P;
+        let cumulativePrincipal = P;
+        let cumulativeInterest = 0;
+
+        for (let year = 1; year <= t; year++) {
+            const startBalance = balance;
+            const yearlyPmt = pmt * 12;
+
+            // Compound within the year, adding monthly contributions
+            let b = balance;
+            let yearInterest = 0;
+            const periodsPerYear = n;
+            const totalPeriods = n * 1; // 1 year
+            const pmtPerPeriod = pmt * 12 / n;
+
+            for (let p = 0; p < periodsPerYear; p++) {
+                const interest = b * (r / n);
+                yearInterest += interest;
+                b = b + interest + pmtPerPeriod;
+            }
+
+            balance = b;
+            cumulativePrincipal += yearlyPmt;
+            cumulativeInterest += yearInterest;
+
+            rows.push({
+                year,
+                start: startBalance,
+                deposited: yearlyPmt,
+                interest: yearInterest,
+                cumPrincipal: cumulativePrincipal,
+                cumInterest: cumulativeInterest,
+                end: balance
+            });
+        }
+
+        const finalAmount = balance;
+        const totalPrincipal = cumulativePrincipal;
+        const totalInterest = cumulativeInterest;
+
+        document.getElementById('finalAmount').textContent = fmt(finalAmount);
+        document.getElementById('totalPrincipal').textContent = fmt(totalPrincipal);
+        document.getElementById('totalInterest').textContent = fmt(totalInterest);
+
+        // Table
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.year}</td>
+                <td>${fmt(r.start)}</td>
+                <td>${fmt(r.deposited)}</td>
+                <td style="color:#00e676">${fmt(r.interest)}</td>
+                <td style="color:#bf7af7">${fmt(r.cumPrincipal)}</td>
+                <td style="color:#00e676">${fmt(r.cumInterest)}</td>
+                <td style="color:#00d4ff;font-weight:600">${fmt(r.end)}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('results').classList.remove('hidden');
+        drawChart(rows);
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function drawChart(rows) {
+        const canvas = document.getElementById('chart');
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.parentElement.clientWidth - 48;
+        const H = 220;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const pad = { top: 16, right: 16, bottom: 36, left: 72 };
+        const cw = W - pad.left - pad.right;
+        const ch = H - pad.top - pad.bottom;
+
+        ctx.clearRect(0, 0, W, H);
+
+        const maxVal = rows[rows.length - 1].end;
+        const n = rows.length;
+        const barW = cw / n;
+        const gap = Math.max(1, barW * 0.15);
+        const bw = barW - gap;
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = pad.top + ch - (i / 4) * ch;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + cw, y);
+            ctx.stroke();
+
+            ctx.fillStyle = '#666';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            const val = (maxVal * i / 4);
+            ctx.fillText(shortFmt(val), pad.left - 6, y + 4);
+        }
+
+        rows.forEach((row, i) => {
+            const x = pad.left + i * barW + gap / 2;
+            const principalH = (row.cumPrincipal / maxVal) * ch;
+            const interestH = (row.cumInterest / maxVal) * ch;
+
+            // Principal bar
+            const gradP = ctx.createLinearGradient(0, pad.top + ch - principalH, 0, pad.top + ch);
+            gradP.addColorStop(0, '#9d4eff');
+            gradP.addColorStop(1, '#7b2ff7');
+            ctx.fillStyle = gradP;
+            ctx.beginPath();
+            ctx.roundRect(x, pad.top + ch - principalH, bw, principalH, [3, 3, 0, 0]);
+            ctx.fill();
+
+            // Interest bar stacked on top
+            const gradI = ctx.createLinearGradient(0, pad.top + ch - principalH - interestH, 0, pad.top + ch - principalH);
+            gradI.addColorStop(0, '#00e5ff');
+            gradI.addColorStop(1, '#00b8d9');
+            ctx.fillStyle = gradI;
+            ctx.beginPath();
+            ctx.roundRect(x, pad.top + ch - principalH - interestH, bw, interestH, [3, 3, 0, 0]);
+            ctx.fill();
+
+            // X axis label (every N years)
+            const step = n <= 20 ? 1 : n <= 30 ? 5 : 10;
+            if (row.year % step === 0 || row.year === 1) {
+                ctx.fillStyle = '#666';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(row.year + '年', x + bw / 2, H - pad.bottom + 16);
+            }
+        });
+    }
+
+    function shortFmt(n) {
+        if (n >= 1e8) return (n / 1e8).toFixed(1) + '億';
+        if (n >= 1e4) return (n / 1e4).toFixed(0) + '萬';
+        return Math.round(n).toString();
+    }
+
+    // Initial calculation on load
+    window.addEventListener('load', calculate);
+    window.addEventListener('resize', () => {
+        const rows = [];
+        const tbody = document.getElementById('tableBody');
+        if (tbody.children.length) {
+            // Re-draw chart on resize
+            const P = parseFloat(document.getElementById('principal').value) || 0;
+            const pmt = parseFloat(document.getElementById('monthly').value) || 0;
+            const r = (parseFloat(document.getElementById('rate').value) || 0) / 100;
+            const t = parseInt(document.getElementById('years').value) || 1;
+            const n = parseInt(document.getElementById('freq').value);
+            let balance = P, cp = P, ci = 0;
+            for (let year = 1; year <= t; year++) {
+                const start = balance;
+                let b = balance, yi = 0;
+                const ppp = pmt * 12 / n;
+                for (let p = 0; p < n; p++) {
+                    const interest = b * (r / n);
+                    yi += interest;
+                    b = b + interest + ppp;
+                }
+                balance = b; cp += pmt * 12; ci += yi;
+                rows.push({ year, start, deposited: pmt * 12, interest: yi, cumPrincipal: cp, cumInterest: ci, end: balance });
+            }
+            drawChart(rows);
+        }
+    });
+</script>
+</body>
+</html>
