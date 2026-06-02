@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>LED 燈條節奏反應遊戲</title>
+<style>
+  :root{
+    --bg:#0a0a0f;
+    --panel:#15151f;
+    --accent:#28e070;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:radial-gradient(circle at 50% 0%, #1a1a2a 0%, var(--bg) 70%);
+    color:#e8e8f0;
+    font-family:-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    display:flex;flex-direction:column;align-items:center;
+    min-height:100%;overflow:hidden;user-select:none;
+  }
+  h1{font-size:18px;font-weight:700;letter-spacing:2px;margin:14px 0 2px;}
+  .sub{font-size:12px;color:#8a8aa0;margin-bottom:6px;}
+
+  .hud{
+    display:flex;gap:18px;align-items:center;justify-content:center;
+    font-variant-numeric:tabular-nums;margin:4px 0 8px;
+  }
+  .hud .box{text-align:center;}
+  .hud .label{font-size:10px;color:#8a8aa0;letter-spacing:1px;}
+  .hud .val{font-size:22px;font-weight:700;}
+  .hud .val.combo{color:#ffd24a;}
+  .lives{font-size:18px;letter-spacing:2px;color:#ff5b6e;}
+
+  /* LED 燈條 */
+  .stage{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .strip{
+    display:flex;flex-direction:column-reverse;gap:3px;
+    padding:10px 8px;border-radius:14px;
+    background:linear-gradient(180deg,#101018,#08080c);
+    box-shadow:inset 0 0 12px #000, 0 0 0 1px #222;
+  }
+  .led{
+    width:46px;height:11px;border-radius:3px;
+    background:#181820;
+    transition:background .04s linear, box-shadow .04s linear;
+  }
+  .led.zone{background:#0c3a1e;}
+  .led.cursor{background:var(--c,#fff);box-shadow:0 0 8px var(--c,#fff),0 0 16px var(--c,#fff);}
+  .led.hit{background:#ffffff;box-shadow:0 0 18px #fff,0 0 30px #fff;}
+
+  .beat-dot{
+    width:14px;height:14px;border-radius:50%;background:#333;
+    transition:transform .05s, background .05s;
+  }
+  .beat-dot.on{background:var(--accent);transform:scale(1.5);box-shadow:0 0 12px var(--accent);}
+
+  /* 按鈕 */
+  .pad{display:flex;gap:22px;margin:14px 0 6px;}
+  .btn{
+    width:74px;height:74px;border-radius:50%;border:none;
+    font-size:13px;font-weight:700;color:#fff;cursor:pointer;
+    box-shadow:0 6px 0 rgba(0,0,0,.5),inset 0 2px 6px rgba(255,255,255,.25);
+    transition:transform .05s, box-shadow .05s;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(0,0,0,.5),inset 0 2px 6px rgba(255,255,255,.25);}
+  .btn.red{background:radial-gradient(circle at 35% 30%,#ff6b6b,#c0202e);}
+  .btn.green{background:radial-gradient(circle at 35% 30%,#5dffa0,#129c4e);}
+  .btn.blue{background:radial-gradient(circle at 35% 30%,#6db4ff,#1556c0);}
+  .btn .k{display:block;font-size:10px;font-weight:500;opacity:.85;margin-top:2px;}
+
+  .hint{font-size:11px;color:#7a7a90;margin-top:2px;text-align:center;line-height:1.5;}
+  .msg{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;
+    background:rgba(5,5,10,.86);backdrop-filter:blur(2px);text-align:center;
+  }
+  .msg.hidden{display:none;}
+  .msg h2{margin:0;font-size:26px;}
+  .msg p{margin:0;color:#9a9ab0;font-size:13px;line-height:1.7;}
+  .msg .big{font-size:40px;color:var(--accent);font-weight:800;}
+  .start-btn{
+    margin-top:8px;padding:12px 26px;border:none;border-radius:30px;
+    background:var(--accent);color:#04140a;font-size:15px;font-weight:700;cursor:pointer;
+  }
+  .flash{animation:fl .25s;}
+  @keyframes fl{0%{filter:brightness(2.2);}100%{filter:brightness(1);}}
+</style>
+</head>
+<body>
+  <h1>LED 燈條 · 節奏反應</h1>
+  <div class="sub">光點進入綠色目標區時按下 — 命中加速、跟上節拍！</div>
+
+  <div class="hud">
+    <div class="box"><div class="label">分數 SCORE</div><div class="val" id="score">0</div></div>
+    <div class="box"><div class="label">關卡 LV</div><div class="val" id="level">1</div></div>
+    <div class="box"><div class="label">連擊 COMBO</div><div class="val combo" id="combo">x1</div></div>
+    <div class="box"><div class="label">生命</div><div class="lives" id="lives">♥♥♥</div></div>
+  </div>
+
+  <div class="stage">
+    <div class="strip" id="strip"></div>
+    <div class="beat-dot" id="beat"></div>
+  </div>
+
+  <div class="pad">
+    <button class="btn red"   id="btnRed">START<span class="k">[Enter]</span></button>
+    <button class="btn green" id="btnGreen">HIT<span class="k">[Space]</span></button>
+    <button class="btn blue"  id="btnBlue">PAUSE<span class="k">[P]</span></button>
+  </div>
+  <div class="hint">綠色=命中 · 紅色=開始/重來 · 藍色=暫停／靜音<br>電腦：空白鍵命中、Enter 開始、P 暫停、M 靜音</div>
+
+  <div class="msg" id="overlay">
+    <h2 id="ovTitle">準備好了嗎？</h2>
+    <p id="ovText">光點會在燈條上來回掃描。<br>當它落在<span style="color:var(--accent)">綠色目標區</span>時，按下 HIT。<br>每命中數次就加速並進入下一關。</p>
+    <button class="start-btn" id="startBtn">開始遊戲</button>
+  </div>
+
+<script>
+(() => {
+  const NLEDS = 24;
+  const stripEl = document.getElementById('strip');
+  const beatEl  = document.getElementById('beat');
+  const els = {
+    score: document.getElementById('score'),
+    level: document.getElementById('level'),
+    combo: document.getElementById('combo'),
+    lives: document.getElementById('lives'),
+    overlay: document.getElementById('overlay'),
+    ovTitle: document.getElementById('ovTitle'),
+    ovText: document.getElementById('ovText'),
+  };
+
+  // 建立 LED
+  const leds = [];
+  for (let i = 0; i < NLEDS; i++) {
+    const d = document.createElement('div');
+    d.className = 'led';
+    stripEl.appendChild(d);
+    leds.push(d);
+  }
+
+  // ---- 音效 (Web Audio) ----
+  let audio = null, muted = false;
+  function ac(){ if(!audio) audio = new (window.AudioContext||window.webkitAudioContext)(); return audio; }
+  function tone(freq, dur=0.09, type='square', gain=0.18){
+    if (muted) return;
+    const a = ac(); const o = a.createOscillator(); const g = a.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  }
+  function kick(){
+    if (muted) return;
+    const a = ac(); const o = a.createOscillator(); const g = a.createGain();
+    o.frequency.setValueAtTime(150, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(50, a.currentTime + 0.12);
+    g.gain.setValueAtTime(0.25, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.14);
+    o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+0.15);
+  }
+
+  // ---- 遊戲狀態 ----
+  const ST = { MENU:0, PLAY:1, PAUSE:2, OVER:3 };
+  let state = ST.MENU;
+  let g = {};
+
+  function resetGame(){
+    g = {
+      pos: 0,            // 光點位置 (float, 0..NLEDS-1)
+      dir: 1,            // 移動方向
+      speed: 9,          // LED / 秒
+      zoneStart: 0,
+      zoneSize: 5,
+      score: 0,
+      level: 1,
+      combo: 1,
+      lives: 3,
+      hitsThisLevel: 0,
+      hitFlashUntil: 0,
+      lastTime: 0,
+      beatPhase: 0,
+    };
+    placeZone();
+  }
+
+  function placeZone(){
+    const maxStart = NLEDS - g.zoneSize;
+    // 避免目標區出現在光點正下方，留點反應空間
+    g.zoneStart = Math.floor(Math.random() * (maxStart + 1));
+  }
+
+  function inZone(p){
+    return p >= g.zoneStart && p <= g.zoneStart + g.zoneSize - 1;
+  }
+
+  function setOverlay(show, title, text){
+    if (show){
+      els.overlay.classList.remove('hidden');
+      if (title!==undefined) els.ovTitle.innerHTML = title;
+      if (text!==undefined)  els.ovText.innerHTML = text;
+    } else {
+      els.overlay.classList.add('hidden');
+    }
+  }
+
+  function updateHUD(){
+    els.score.textContent = g.score;
+    els.level.textContent = g.level;
+    els.combo.textContent = 'x' + g.combo;
+    els.lives.textContent = '♥'.repeat(g.lives) + '·'.repeat(Math.max(0,3-g.lives));
+  }
+
+  // 光點顏色隨關卡變化
+  function cursorColor(){
+    const hues = ['#ff5b6e','#ffd24a','#28e070','#39c6ff','#b06bff'];
+    return hues[(g.level-1) % hues.length];
+  }
+
+  function startGame(){
+    resetGame();
+    state = ST.PLAY;
+    setOverlay(false);
+    updateHUD();
+    g.lastTime = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function gameOver(){
+    state = ST.OVER;
+    tone(160,0.5,'sawtooth',0.2);
+    setOverlay(true,
+      '遊戲結束',
+      `<span class="big">${g.score}</span><br>抵達第 ${g.level} 關 · 最高連擊紀錄已結算<br>按紅色 START 或 Enter 再玩一次`);
+  }
+
+  // ---- 命中判定 ----
+  function doHit(){
+    if (state !== ST.PLAY) return;
+    const p = g.pos;
+    if (inZone(p)){
+      // 越靠近目標區中心，分數越高
+      const center = g.zoneStart + (g.zoneSize-1)/2;
+      const dist = Math.abs(p - center);
+      const half = g.zoneSize/2;
+      const accuracy = Math.max(0, 1 - dist/half);   // 0..1
+      const perfect = accuracy > 0.7;
+      const base = perfect ? 100 : 50;
+      g.score += Math.round(base * g.combo);
+      g.combo = Math.min(g.combo + 1, 99);
+      g.hitsThisLevel++;
+      g.hitFlashUntil = performance.now() + 120;
+
+      // 音效：完美時更高音
+      tone(perfect ? 880 : 660, 0.1, 'square', 0.2);
+      kick();
+      flashStrip();
+
+      // 每 3 次命中升級
+      if (g.hitsThisLevel >= 3){
+        levelUp();
+      } else {
+        placeZone();
+      }
+    } else {
+      // 失誤
+      g.combo = 1;
+      g.lives--;
+      tone(120,0.18,'sawtooth',0.22);
+      shake();
+      if (g.lives <= 0){
+        updateHUD();
+        gameOver();
+        return;
+      }
+    }
+    updateHUD();
+  }
+
+  function levelUp(){
+    g.level++;
+    g.hitsThisLevel = 0;
+    g.speed += 2.2;                                   // 加速
+    g.zoneSize = Math.max(2, 5 - Math.floor(g.level/2)); // 目標區縮小
+    placeZone();
+    tone(523,0.08); setTimeout(()=>tone(659,0.08),80); setTimeout(()=>tone(784,0.12),160);
+  }
+
+  function flashStrip(){
+    stripEl.classList.remove('flash'); void stripEl.offsetWidth; stripEl.classList.add('flash');
+  }
+  function shake(){
+    document.body.style.transition='transform .05s';
+    document.body.style.transform='translateX(-6px)';
+    setTimeout(()=>{document.body.style.transform='translateX(6px)';},50);
+    setTimeout(()=>{document.body.style.transform='';},100);
+  }
+
+  // ---- 主迴圈 ----
+  function loop(now){
+    if (state !== ST.PLAY){ return; }
+    const dt = Math.min(0.05, (now - g.lastTime)/1000);
+    g.lastTime = now;
+
+    // 移動光點（來回反彈）
+    g.pos += g.dir * g.speed * dt;
+    if (g.pos >= NLEDS-1){ g.pos = NLEDS-1; g.dir = -1; }
+    if (g.pos <= 0){ g.pos = 0; g.dir = 1; }
+
+    // 節拍：跟著速度跳動
+    const bpmHz = g.speed / 4;
+    g.beatPhase += dt * bpmHz;
+    if (g.beatPhase >= 1){
+      g.beatPhase -= 1;
+      beatEl.classList.add('on');
+      kick();
+      setTimeout(()=>beatEl.classList.remove('on'),90);
+    }
+
+    render(now);
+    requestAnimationFrame(loop);
+  }
+
+  function render(now){
+    const cur = Math.round(g.pos);
+    const flashing = now < g.hitFlashUntil;
+    for (let i=0;i<NLEDS;i++){
+      const el = leds[i];
+      let cls = 'led';
+      if (inZone(i)) cls += ' zone';
+      if (i === cur){
+        cls += flashing ? ' hit' : ' cursor';
+        el.style.setProperty('--c', cursorColor());
+      }
+      el.className = cls;
+    }
+  }
+
+  // ---- 輸入 ----
+  function hitAction(){ if(audio) ac().resume(); doHit(); }
+  function startAction(){
+    if(audio) ac().resume();
+    if (state===ST.MENU || state===ST.OVER) startGame();
+  }
+  function pauseAction(){
+    if (state===ST.PLAY){
+      state=ST.PAUSE; setOverlay(true,'暫停中','按藍色 PAUSE 或 P 繼續');
+    } else if (state===ST.PAUSE){
+      state=ST.PLAY; setOverlay(false); g.lastTime=performance.now(); requestAnimationFrame(loop);
+    }
+  }
+  function toggleMute(){ muted=!muted; document.getElementById('btnBlue').style.opacity = muted?0.5:1; }
+
+  document.getElementById('btnGreen').addEventListener('click', hitAction);
+  document.getElementById('btnRed').addEventListener('click', startAction);
+  document.getElementById('btnBlue').addEventListener('click', pauseAction);
+  document.getElementById('startBtn').addEventListener('click', startAction);
+
+  window.addEventListener('keydown', e=>{
+    if (e.repeat) return;
+    if (e.code==='Space'){ e.preventDefault(); hitAction(); }
+    else if (e.code==='Enter'){ startAction(); }
+    else if (e.key==='p'||e.key==='P'){ pauseAction(); }
+    else if (e.key==='m'||e.key==='M'){ toggleMute(); }
+  });
+
+  // 初始畫面
+  resetGame();
+  render(performance.now());
+  updateHUD();
+})();
+</script>
+</body>
+</html>
