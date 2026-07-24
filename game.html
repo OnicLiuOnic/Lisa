@@ -187,8 +187,8 @@
   </div>
   <p class="title-rule">
     自由改裝你的陀螺——軸心與 小・中・大 三層盤片，總重不得超過 <b>39.9 克</b>。<br>
-    戰鬥盤<b>中央低、四周高</b>，陀螺順著重力自然滑向盤心對撞、撞牆則彈回。<br>
-    把對手<b>打出場外</b>，或撐到對手<b>先停轉</b>，即獲勝利。<br>
+    戰鬥盤中央有<b>凸脊</b>、外圈為<b>環形溝槽</b>，陀螺繞脊公轉、於各角度交鋒。<br>
+    盤緣有三個<b>出場缺口</b>——把對手轟進缺口，或撐到對手<b>先停轉</b>，即獲勝利。<br>
     鋸齒兇猛、圓盤圓滑善避、外重則久轉不衰——改裝決定命運。
   </p>
 </section>
@@ -328,9 +328,9 @@ const LIMIT = 39.9;          // 總重上限 (g)
 const AXIS_W = 5.0;          // 軸心固定重量 (g)
 const TIPS = {
   // damp = 滾動摩擦（越高越快沉到中心穩定住）；friction = 轉速衰減；mob = 機動預覽
-  spike: { name:'尖錐', friction:0.58, damp:1.05, mob:0.3 },
-  dome:  { name:'半球', friction:1.0,  damp:0.62, mob:0.6 },
-  flat:  { name:'平底', friction:1.2,  damp:0.34, mob:1.0 },
+  spike: { name:'尖錐', friction:0.72, damp:1.05, mob:0.3 },
+  dome:  { name:'半球', friction:0.86, damp:0.62, mob:0.6 },
+  flat:  { name:'平底', friction:1.08, damp:0.34, mob:1.0 },
 };
 const SHAPES = {
   round: { name:'圓形', attack:0.6,  selfLoss:0.62, grip:0.5,  spikes:0  },
@@ -364,20 +364,37 @@ function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.im
 const ARENA_R = 330;         // 場地半徑 (px, 世界座標 760×760 中心 0,0)
 const MM2PX = 1.9;           // mm → px
 const PH = {
-  bowlK: 3.5,                // 碗形重力：向心加速度 ∝ 離心距離（拋物面盤，越靠邊坡越陡）
+  // 場地地形：中央凸脊 + 環形溝槽（仿真實 Beyblade 場地，陀螺繞脊公轉而非全擠中心）
+  bowlK: 3.2,                // 溝槽回復力：把陀螺拉向半徑 gutterR 的環形溝槽
+  gutterR: 82,              // 環形溝槽半徑（位能最低圈）——內側被中央脊推出、外側被盤壁拉回
+  ridgeR: 232,             // 龍捲脊半徑（外圈山脊，快速陀螺可越脊到外圈溝槽繞行）
+  ridgeK: 320,             // 龍捲脊排斥強度
+  ridgeW: 44,              // 龍捲脊半寬
   spinBase: 2.6,             // 基礎轉速衰減 (unit/s)
   moveCost: 0.004,           // 移動造成的轉速消耗
   restitution: 0.82,         // 陀螺間恢復係數
-  burst: 4500,               // 攻擊爆發：命中瞬間沿法線的彈射力（依攻擊外形×轉速）
+  burst: 6200,               // 攻擊爆發：命中瞬間沿法線的彈射力（依攻擊外形×轉速）
   wallRest: 0.78,            // 撞牆恢復係數（彈性反彈）
   wallSpinLoss: 0.012,       // 撞牆的轉速削減係數
-  ringOut: 385,              // 撞牆徑向速度超過此值 → 擊飛出場 (px/s)
-  hitLoss: 0.03,             // 碰撞轉速損耗係數
+  ringOut: 430,              // 撞「實牆」徑向速度超過此值才擊飛出場（很難）(px/s)
+  pocketOut: 95,             // 進入「出場缺口」的徑向速度超過此值即出場（很易）(px/s)
+  pocketN: 3,                // 出場缺口數
+  pocketHalf: 0.42,          // 每個缺口的角半寬 (rad)
+  pocketBase: -Math.PI/2,    // 第一個缺口方位（正上方）
+  hitLoss: 0.042,            // 碰撞轉速損耗係數
   hitMin: 25,                // 法向速度低於此值視為貼磨，不算一擊 (px/s)
   grip: 0.045,               // 轉速差切向抽擊係數
   stopSpin: 7,               // 低於此轉速 → 倒下
   maxTime: 75,               // 時間到 → 判定勝
 };
+// 判斷某方位角是否落在出場缺口內
+function angGap(a, b){ let d = Math.abs(a-b) % (Math.PI*2); return d > Math.PI ? Math.PI*2-d : d; }
+function inPocket(ang){
+  for (let i=0;i<PH.pocketN;i++){
+    if (angGap(ang, PH.pocketBase + i*(Math.PI*2/PH.pocketN)) < PH.pocketHalf) return true;
+  }
+  return false;
+}
 
 function makeTop(cfg, side, power, angle){
   const s = deriveStats(cfg);
@@ -403,10 +420,17 @@ function stepWorld(w, dt){
       t.ang += t.spin*0.35*dt; t.spin = Math.max(0, t.spin - 18*dt);
       continue;
     }
-    // 碗形重力：拋物面盤，向心加速度與離心距離成正比
-    // → 陀螺自然朝盤心滑落並加速，越靠邊（坡越陡）拉力越強；無任何朝對手的主動力
-    t.vx += -PH.bowlK * t.x * dt;
-    t.vy += -PH.bowlK * t.y * dt;
+    // 場地地形力：向環形溝槽 gutterR 靠攏——中央脊把陀螺往外推、外圈盤壁把它拉回，
+    // 陀螺於是繞著中央脊在溝槽環上公轉，在各角度交鋒，而非全部擠向正中心
+    const d = Math.hypot(t.x, t.y) || 1e-6;
+    let aR = -PH.bowlK * (d - PH.gutterR);
+    // 龍捲脊：外圈環形山脊，兩側各自往外推離峰頂——夠猛的一擊才能把對手越脊頂向盤緣缺口
+    const dr = d - PH.ridgeR;
+    if (Math.abs(dr) < PH.ridgeW){
+      aR += Math.sign(dr) * PH.ridgeK * (1 - Math.abs(dr)/PH.ridgeW);
+    }
+    t.vx += aR * (t.x/d) * dt;
+    t.vy += aR * (t.y/d) * dt;
     // 滾動摩擦：緩慢耗散動能，使軌道逐漸收斂（平底滑得遠、尖錐較快沉底穩定）
     const fk = Math.exp(-t.stats.tip.damp * dt);
     t.vx *= fk; t.vy *= fk;
@@ -415,16 +439,18 @@ function stepWorld(w, dt){
     const sp = Math.hypot(t.vx,t.vy);
     t.spin -= (PH.spinBase * t.stats.tip.friction / t.iN + PH.moveCost*sp) * dt;
     t.ang += t.spin*0.35*dt;
-    // 撞牆 / 出場
+    // 盤緣：出場缺口 vs 實牆
     const dd = Math.hypot(t.x,t.y);
     if (dd > ARENA_R - t.r){
       const nx = t.x/dd, ny = t.y/dd;
       const vr = t.vx*nx + t.vy*ny;       // 徑向速度（向外為正）
-      if (vr > PH.ringOut){                // 擊飛出場！
+      const gap = inPocket(Math.atan2(t.y, t.x));      // 是否對準出場缺口
+      const outThreshold = gap ? PH.pocketOut : PH.ringOut;
+      if (vr > outThreshold){              // 出場！（缺口很易、實牆很難）
         t.alive = false; t.out = true;
-        t.outV = { x: t.vx*1.15, y: t.vy*1.15 };
+        t.outV = { x: t.vx*1.2, y: t.vy*1.2 };
         w.events.push({type:'out', x:t.x, y:t.y, side:t.side});
-      } else {
+      } else {                             // 撞牆彈回
         t.x = nx*(ARENA_R-t.r); t.y = ny*(ARENA_R-t.r);
         if (vr > 0){
           t.vx -= (1+PH.wallRest)*vr*nx;  t.vy -= (1+PH.wallRest)*vr*ny;
@@ -847,18 +873,41 @@ function drawBattle(dt){
   const sx = (Math.random()-0.5)*shake, sy=(Math.random()-0.5)*shake;
   shake = Math.max(0, shake - dt*30);
   ctx.translate(W/2+sx, W/2+sy);
-  // 戰鬥盤（碗形）
-  const grad = ctx.createRadialGradient(0,-40,40, 0,0,ARENA_R);
-  grad.addColorStop(0,'#f7f1e2'); grad.addColorStop(0.8,'#e9dfc8'); grad.addColorStop(1,'#d9cbab');
+  // 戰鬥盤底（碗形漸層：中央丘亮、溝槽暗、外圈再亮）
+  const grad = ctx.createRadialGradient(0,-50,20, 0,0,ARENA_R);
+  grad.addColorStop(0,'#f2e9d4'); grad.addColorStop(0.4,'#e3d7bb');
+  grad.addColorStop(0.72,'#ece0c6'); grad.addColorStop(1,'#d3c2a0');
   ctx.beginPath(); ctx.arc(0,0,ARENA_R,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
-  ctx.lineWidth=6; ctx.strokeStyle='#2a241d'; ctx.stroke();
-  // 盤面圈紋
-  ctx.lineWidth=1; ctx.strokeStyle='rgba(42,36,29,0.15)';
-  for (const rr of [0.33,0.66]){ ctx.beginPath(); ctx.arc(0,0,ARENA_R*rr,0,Math.PI*2); ctx.stroke(); }
-  ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fillStyle='rgba(42,36,29,0.3)'; ctx.fill();
-  // 危險緣
-  ctx.lineWidth=10; ctx.strokeStyle='rgba(192,74,46,0.25)';
-  ctx.beginPath(); ctx.arc(0,0,ARENA_R-8,0,Math.PI*2); ctx.stroke();
+  // 環形溝槽（位能最低圈）：柔和凹陷陰影
+  ctx.beginPath(); ctx.arc(0,0,PH.gutterR,0,Math.PI*2);
+  ctx.lineWidth=20; ctx.strokeStyle='rgba(88,70,46,0.10)'; ctx.stroke();
+  // 龍捲脊：外圈隆起環（外亮內暗，呈現山脊）
+  ctx.beginPath(); ctx.arc(0,0,PH.ridgeR,0,Math.PI*2);
+  ctx.lineWidth=7; ctx.strokeStyle='rgba(255,251,238,0.55)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,PH.ridgeR+5,0,Math.PI*2);
+  ctx.lineWidth=2.5; ctx.strokeStyle='rgba(88,70,46,0.25)'; ctx.stroke();
+  // 中央凸脊（隆起圓丘 + 高光）
+  const mound = ctx.createRadialGradient(-16,-20,3, 0,0,PH.gutterR*0.98);
+  mound.addColorStop(0,'#f9f2e2'); mound.addColorStop(0.65,'#e9ddc1'); mound.addColorStop(1,'rgba(201,183,151,0)');
+  ctx.beginPath(); ctx.arc(0,0,PH.gutterR*0.98,0,Math.PI*2); ctx.fillStyle=mound; ctx.fill();
+  ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fillStyle='rgba(88,70,46,0.28)'; ctx.fill();
+  // 盤壁（3 段實牆）＋ 出場缺口（紅色危險開口）
+  const seg = 2*Math.PI/PH.pocketN;
+  for (let i=0;i<PH.pocketN;i++){
+    const cc = PH.pocketBase + i*seg;
+    // 缺口之間的實牆弧
+    ctx.beginPath(); ctx.arc(0,0,ARENA_R-3, cc+PH.pocketHalf, cc+seg-PH.pocketHalf);
+    ctx.lineWidth=7; ctx.lineCap='butt'; ctx.strokeStyle='#2a241d'; ctx.stroke();
+    // 出場缺口：紅弧 + 外側放射危險線
+    ctx.beginPath(); ctx.arc(0,0,ARENA_R-3, cc-PH.pocketHalf, cc+PH.pocketHalf);
+    ctx.lineWidth=5; ctx.strokeStyle='rgba(192,74,46,0.5)'; ctx.stroke();
+    for (let a=cc-PH.pocketHalf; a<=cc+PH.pocketHalf+1e-3; a+=0.1){
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*(ARENA_R-1), Math.sin(a)*(ARENA_R-1));
+      ctx.lineTo(Math.cos(a)*(ARENA_R+15), Math.sin(a)*(ARENA_R+15));
+      ctx.lineWidth=2.5; ctx.strokeStyle='rgba(192,74,46,0.45)'; ctx.stroke();
+    }
+  }
   // 陀螺
   const w = game.world;
   for (const t of w.tops){
