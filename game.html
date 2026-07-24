@@ -330,11 +330,11 @@ const TIPS = {
   // damp = 滾動摩擦（越高越快沉到中心穩定住）；friction = 轉速衰減；mob = 機動預覽
   spike: { name:'尖錐', friction:0.72, damp:1.05, mob:0.3 },
   dome:  { name:'半球', friction:0.86, damp:0.62, mob:0.6 },
-  flat:  { name:'平底', friction:1.08, damp:0.34, mob:1.0 },
+  flat:  { name:'平底', friction:0.9,  damp:0.34, mob:1.0 },
 };
 const SHAPES = {
   round: { name:'圓形', attack:0.6,  selfLoss:0.62, grip:0.5,  spikes:0  },
-  saw:   { name:'鋸齒', attack:1.55, selfLoss:1.3,  grip:1.0,  spikes:12 },
+  saw:   { name:'鋸齒', attack:1.55, selfLoss:0.98, grip:1.0,  spikes:12 },
   blade: { name:'三刃', attack:1.05, selfLoss:0.95, grip:1.65, spikes:3  },
 };
 
@@ -365,19 +365,21 @@ const ARENA_R = 330;         // 場地半徑 (px, 世界座標 760×760 中心 0
 const MM2PX = 1.9;           // mm → px
 const PH = {
   // 場地地形：中央凸脊 + 環形溝槽（仿真實 Beyblade 場地，陀螺繞脊公轉而非全擠中心）
-  bowlK: 3.2,                // 溝槽回復力：把陀螺拉向半徑 gutterR 的環形溝槽
-  gutterR: 82,              // 環形溝槽半徑（位能最低圈）——內側被中央脊推出、外側被盤壁拉回
-  ridgeR: 232,             // 龍捲脊半徑（外圈山脊，快速陀螺可越脊到外圈溝槽繞行）
+  bowlK: 1.3,                // 弱碗形：陀螺畫大圈在整個場上遊走（經牆邊、於各處交錯交鋒），非鎖死中心
+  gutterR: 30,              // 中央小丘半徑（避免停在正中心）
+  ridgeR: 232,             // 龍捲脊半徑（外圈山脊，快速陀螺可越脊到外圈繞行）
   ridgeK: 320,             // 龍捲脊排斥強度
   ridgeW: 44,              // 龍捲脊半寬
+  jitter: 60,              // 微幅擾動：破除兩顆完全對稱的繞圈僵局
   spinBase: 2.6,             // 基礎轉速衰減 (unit/s)
   moveCost: 0.004,           // 移動造成的轉速消耗
-  restitution: 0.82,         // 陀螺間恢復係數
-  burst: 6200,               // 攻擊爆發：命中瞬間沿法線的彈射力（依攻擊外形×轉速）
+  restitution: 0.72,         // 陀螺間恢復係數
+  burst: 3000,               // 攻擊爆發：命中瞬間沿法線的彈射力（依攻擊外形×轉速）
+  knockCap: 580,             // 單次撞擊給對手的最大彈射速度（能把對手往缺口推出，但中心對撞仍不秒殺）
   wallRest: 0.78,            // 撞牆恢復係數（彈性反彈）
   wallSpinLoss: 0.012,       // 撞牆的轉速削減係數
-  ringOut: 430,              // 撞「實牆」徑向速度超過此值才擊飛出場（很難）(px/s)
-  pocketOut: 95,             // 進入「出場缺口」的徑向速度超過此值即出場（很易）(px/s)
+  ringOut: 470,              // 撞「實牆」徑向速度超過此值才擊飛出場（很難）(px/s)
+  pocketOut: 175,            // 進入「出場缺口」的徑向速度超過此值即出場（需夠力）(px/s)
   pocketN: 3,                // 出場缺口數
   pocketHalf: 0.42,          // 每個缺口的角半寬 (rad)
   pocketBase: -Math.PI/2,    // 第一個缺口方位（正上方）
@@ -420,8 +422,8 @@ function stepWorld(w, dt){
       t.ang += t.spin*0.35*dt; t.spin = Math.max(0, t.spin - 18*dt);
       continue;
     }
-    // 場地地形力：向環形溝槽 gutterR 靠攏——中央脊把陀螺往外推、外圈盤壁把它拉回，
-    // 陀螺於是繞著中央脊在溝槽環上公轉，在各角度交鋒，而非全部擠向正中心
+    // 場地地形力：碗形把陀螺拉向中央小丘周圍近距離纏鬥（保證雙方交鋒），
+    // 中央小丘（gutterR 內）把陀螺往外推、避免停在正中心
     const d = Math.hypot(t.x, t.y) || 1e-6;
     let aR = -PH.bowlK * (d - PH.gutterR);
     // 龍捲脊：外圈環形山脊，兩側各自往外推離峰頂——夠猛的一擊才能把對手越脊頂向盤緣缺口
@@ -431,6 +433,9 @@ function stepWorld(w, dt){
     }
     t.vx += aR * (t.x/d) * dt;
     t.vy += aR * (t.y/d) * dt;
+    // 微幅擾動：破除兩顆完全對稱、繞圈永不交鋒的僵局
+    t.vx += (w.rng()-0.5)*PH.jitter*dt;
+    t.vy += (w.rng()-0.5)*PH.jitter*dt;
     // 滾動摩擦：緩慢耗散動能，使軌道逐漸收斂（平底滑得遠、尖錐較快沉底穩定）
     const fk = Math.exp(-t.stats.tip.damp * dt);
     t.vx *= fk; t.vy *= fk;
@@ -478,19 +483,18 @@ function stepWorld(w, dt){
       const vn = rvx*nx + rvy*ny;
       if (vn < 0){
         const invM = 1/A.m + 1/B.m;
-        // 法向衝量（外形攻擊係數放大撞擊）
         const atkBoost = 1 + 0.5*(A.stats.shape.attack + B.stats.shape.attack - 1.2);
         const j = -(1+PH.restitution*Math.min(1.8,atkBoost)) * vn / invM;
-        A.vx -= j*nx/A.m; A.vy -= j*ny/A.m;
-        B.vx += j*nx/B.m; B.vy += j*ny/B.m;
-        // 只有夠力的撞擊才算「一擊」：貼著磨的微碰撞只彈開、不咬轉速
-        if (-vn > PH.hitMin){
-          // 攻擊爆發：旋轉的攻擊環把對手瞬間沿法線彈射出去（噴出去的爽感）
-          // 力道 = 對方攻擊外形 × 對方當前轉速；自身越重越不易被噴飛
-          const powA = B.stats.shape.attack * (0.45 + 0.55*B.spin/B.spin0); // A 承受 B 的爆發
-          const powB = A.stats.shape.attack * (0.45 + 0.55*A.spin/A.spin0); // B 承受 A 的爆發
-          A.vx -= nx*PH.burst*powA/A.m; A.vy -= ny*PH.burst*powA/A.m;       // A 往遠離 B 噴
-          B.vx += nx*PH.burst*powB/B.m; B.vy += ny*PH.burst*powB/B.m;       // B 往遠離 A 噴
+        const hard = (-vn > PH.hitMin);
+        // 法向彈開 + 攻擊爆發合併，並夾限單擊彈射速度——開場對撞是「彈開」而非「秒殺」，
+        // 只有把已在盤緣的對手再推一把才會出場（出場靠走位，不是靠一發）
+        const powA = hard ? B.stats.shape.attack * (0.45 + 0.55*B.spin/B.spin0) : 0;
+        const powB = hard ? A.stats.shape.attack * (0.45 + 0.55*A.spin/A.spin0) : 0;
+        const dA = Math.min(PH.knockCap, j/A.m + PH.burst*powA/A.m);
+        const dB = Math.min(PH.knockCap, j/B.m + PH.burst*powB/B.m);
+        A.vx -= nx*dA; A.vy -= ny*dA;   // A 往遠離 B 彈開/噴射
+        B.vx += nx*dB; B.vy += ny*dB;   // B 往遠離 A 彈開/噴射
+        if (hard){
           // 轉速差切向抽擊（三刃 grip 高，把對手甩偏）
           const tx = -ny, ty = nx;
           const surf = (A.spin*A.stats.shape.grip - B.spin*B.stats.shape.grip);
