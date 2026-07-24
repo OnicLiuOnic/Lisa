@@ -187,6 +187,7 @@
   </div>
   <p class="title-rule">
     自由改裝你的陀螺——軸心與 小・中・大 三層盤片，總重不得超過 <b>39.9 克</b>。<br>
+    戰鬥盤<b>中央低、四周高</b>，陀螺順著重力自然滑向盤心對撞、撞牆則彈回。<br>
     把對手<b>打出場外</b>，或撐到對手<b>先停轉</b>，即獲勝利。<br>
     鋸齒兇猛、圓盤圓滑善避、外重則久轉不衰——改裝決定命運。
   </p>
@@ -220,7 +221,7 @@
         <div class="choice-row" id="tip-row">
           <button class="choice" data-tip="spike"><b>尖錐</b><small>釘在原地穩如泰山，轉速衰減最慢——持久型</small></button>
           <button class="choice" data-tip="dome"><b>半球</b><small>攻守均衡，緩慢游走</small></button>
-          <button class="choice" data-tip="flat"><b>平底</b><small>滿場暴走主動追擊，但轉速消耗快——侵略型</small></button>
+          <button class="choice" data-tip="flat"><b>平底</b><small>不易沉底、滿場滑走頻繁碰撞，但轉速消耗快——侵略型</small></button>
         </div>
       </div>
       <div class="part">
@@ -252,7 +253,7 @@
       <div class="part" id="ai-presets">
         <div class="part-name"><h3>AI 對手</h3><span>選擇對手的改裝流派</span></div>
         <div class="preset-row" id="preset-row">
-          <button class="choice" data-preset="attack"><b>攻擊型</b><small>鋸齒＋平底＋重外圈，追著你轟</small></button>
+          <button class="choice" data-preset="attack"><b>攻擊型</b><small>鋸齒＋平底＋重外圈，滿場猛撞</small></button>
           <button class="choice" data-preset="defense"><b>防禦型</b><small>圓形重甲，打不動也推不走</small></button>
           <button class="choice" data-preset="stamina"><b>持久型</b><small>尖錐外重，跟你耗到底</small></button>
           <button class="choice" data-preset="random"><b>隨機</b><small>神秘改裝，未知數</small></button>
@@ -326,9 +327,10 @@
 const LIMIT = 39.9;          // 總重上限 (g)
 const AXIS_W = 5.0;          // 軸心固定重量 (g)
 const TIPS = {
-  spike: { name:'尖錐', friction:0.72, damp:1.6, chase:0,   mob:0.25 },
-  dome:  { name:'半球', friction:1.0,  damp:0.75, chase:14,  mob:0.6 },
-  flat:  { name:'平底', friction:1.15, damp:0.28, chase:52,  mob:1.0 },
+  // damp = 滾動摩擦（越高越快沉到中心穩定住）；friction = 轉速衰減；mob = 機動預覽
+  spike: { name:'尖錐', friction:0.72, damp:1.05, mob:0.3 },
+  dome:  { name:'半球', friction:1.0,  damp:0.62, mob:0.6 },
+  flat:  { name:'平底', friction:1.2,  damp:0.34, mob:1.0 },
 };
 const SHAPES = {
   round: { name:'圓形', attack:0.6,  selfLoss:0.62, grip:0.5,  spikes:0  },
@@ -362,13 +364,13 @@ function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.im
 const ARENA_R = 330;         // 場地半徑 (px, 世界座標 760×760 中心 0,0)
 const MM2PX = 1.9;           // mm → px
 const PH = {
-  bowl: 62,                  // 碗形回中加速度上限 (px/s²)
-  spinBase: 2.35,            // 基礎轉速衰減 (unit/s)
-  moveCost: 0.0045,          // 移動造成的轉速消耗
-  restitution: 0.84,         // 陀螺間恢復係數
-  wallRest: 0.45,            // 牆恢復係數
-  ringOut: 290,              // 撞牆徑向速度超過此值 → 擊飛出場 (px/s)
-  hitLoss: 0.036,            // 碰撞轉速損耗係數
+  bowlK: 3.5,                // 碗形重力：向心加速度 ∝ 離心距離（拋物面盤，越靠邊坡越陡）
+  spinBase: 2.6,             // 基礎轉速衰減 (unit/s)
+  moveCost: 0.004,           // 移動造成的轉速消耗
+  restitution: 0.82,         // 陀螺間恢復係數
+  wallRest: 0.7,             // 撞牆恢復係數（彈性反彈）
+  ringOut: 300,              // 撞牆徑向速度超過此值 → 擊飛出場 (px/s)
+  hitLoss: 0.03,             // 碰撞轉速損耗係數
   hitMin: 30,                // 法向速度低於此值視為貼磨，不算一擊 (px/s)
   grip: 0.045,               // 轉速差切向抽擊係數
   stopSpin: 7,               // 低於此轉速 → 倒下
@@ -385,7 +387,7 @@ function makeTop(cfg, side, power, angle){
     x: px, y: 0,
     vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
     spin: 58 + 66*power, spin0: 58 + 66*power,
-    ang: 0, alive:true, out:false, toppleT:0, outV:{x:0,y:0}, lungeT:0,
+    ang: 0, alive:true, out:false, toppleT:0, outV:{x:0,y:0},
   };
 }
 
@@ -399,27 +401,15 @@ function stepWorld(w, dt){
       t.ang += t.spin*0.35*dt; t.spin = Math.max(0, t.spin - 18*dt);
       continue;
     }
-    const d = Math.hypot(t.x, t.y) || 1e-6;
-    // 碗形回中
-    const bowl = PH.bowl * Math.min(1, d/ARENA_R);
-    t.vx += -t.x/d * bowl * dt;  t.vy += -t.y/d * bowl * dt;
-    // 迴旋漂移：自轉帶動繞盤心公轉，讓雙方持續交錯
-    const orbit = 26 * (t.spin/t.spin0);
-    t.vx += -t.y/d * orbit * dt;  t.vy += t.x/d * orbit * dt;
-    // 突進：平底(猛)/半球(緩) 軸心週期性衝向對手
-    const foe = t===A? B : A;
-    t.lungeT -= dt;
-    if (t.lungeT<=0 && t.stats.tip.chase>0 && foe.alive && t.spin>15){
-      const fx = foe.x-t.x, fy = foe.y-t.y, fd = Math.hypot(fx,fy)||1e-6;
-      const dv = t.stats.tip.chase*5 * (0.7+0.3*t.spin/t.spin0);
-      t.vx += fx/fd*dv;  t.vy += fy/fd*dv;
-      t.lungeT = (1.0 + w.rng()*1.4) * (t.stats.tip.mob>0.9? 0.8 : 1.35);
-    }
-    // 移動阻尼（尖錐幾乎立刻停住、平底持續滑走）
-    const k = Math.exp(-t.stats.tip.damp*dt);
-    t.vx *= k; t.vy *= k;
+    // 碗形重力：拋物面盤，向心加速度與離心距離成正比
+    // → 陀螺自然朝盤心滑落並加速，越靠邊（坡越陡）拉力越強；無任何朝對手的主動力
+    t.vx += -PH.bowlK * t.x * dt;
+    t.vy += -PH.bowlK * t.y * dt;
+    // 滾動摩擦：緩慢耗散動能，使軌道逐漸收斂（平底滑得遠、尖錐較快沉底穩定）
+    const fk = Math.exp(-t.stats.tip.damp * dt);
+    t.vx *= fk; t.vy *= fk;
     t.x += t.vx*dt; t.y += t.vy*dt;
-    // 轉速衰減：摩擦(軸心/慣量) + 移動消耗
+    // 轉速衰減：軸心摩擦 / 轉動慣量 + 少量移動消耗
     const sp = Math.hypot(t.vx,t.vy);
     t.spin -= (PH.spinBase * t.stats.tip.friction / t.iN + PH.moveCost*sp) * dt;
     t.ang += t.spin*0.35*dt;
@@ -462,7 +452,7 @@ function stepWorld(w, dt){
         const invM = 1/A.m + 1/B.m;
         // 法向衝量（外形攻擊係數放大撞擊）
         const atkBoost = 1 + 0.5*(A.stats.shape.attack + B.stats.shape.attack - 1.2);
-        const j = -(1+PH.restitution*Math.min(1.35,atkBoost)) * vn / invM;
+        const j = -(1+PH.restitution*Math.min(1.7,atkBoost)) * vn / invM;
         A.vx -= j*nx/A.m; A.vy -= j*ny/A.m;
         B.vx += j*nx/B.m; B.vy += j*ny/B.m;
         // 只有夠力的撞擊才算「一擊」：貼著磨的微碰撞只彈開、不咬轉速
@@ -473,10 +463,10 @@ function stepWorld(w, dt){
           const jt = Math.max(-j, Math.min(j, surf*PH.grip/invM*0.02));
           A.vx -= jt*tx/A.m; A.vy -= jt*ty/A.m;
           B.vx += jt*tx/B.m; B.vy += jt*ty/B.m;
-          // 轉速損耗：被對方外形咬掉 + 自身外形反作用
+          // 轉速損耗：被對方外形咬掉 + 自身外形反作用（鋸齒自損重，攻擊需付代價）
           const impact = j; // g·px/s
-          const lossA = impact*PH.hitLoss*(0.85*B.stats.shape.attack + 0.15*A.stats.shape.selfLoss)/(A.iN*A.m);
-          const lossB = impact*PH.hitLoss*(0.85*A.stats.shape.attack + 0.15*B.stats.shape.selfLoss)/(B.iN*B.m);
+          const lossA = impact*PH.hitLoss*(0.72*B.stats.shape.attack + 0.28*A.stats.shape.selfLoss)/(A.iN*A.m);
+          const lossB = impact*PH.hitLoss*(0.72*A.stats.shape.attack + 0.28*B.stats.shape.selfLoss)/(B.iN*B.m);
           A.spin = Math.max(0, A.spin - lossA);
           B.spin = Math.max(0, B.spin - lossB);
           w.hits++; w.maxHit = Math.max(w.maxHit, Math.round(impact/ (A.m+B.m) *10));
@@ -509,7 +499,6 @@ function makeWorld(cfgA, cfgB, pA, pB, angA, angB, seed){
   const w = { tops:[makeTop(cfgA,0,pA,angA), makeTop(cfgB,1,pB,angB)],
               time:0, over:false, winner:null, reason:'', hits:0, maxHit:0, events:[],
               rng: mulberry32((seed ?? (Math.random()*1e9))|0 || 1) };
-  for (const t of w.tops) t.lungeT = 0.9 + w.rng()*1.2;
   return w;
 }
 
