@@ -328,7 +328,7 @@ const LIMIT = 39.9;          // 總重上限 (g)
 const AXIS_W = 5.0;          // 軸心固定重量 (g)
 const TIPS = {
   // damp = 滾動摩擦（越高越快沉到中心穩定住）；friction = 轉速衰減；mob = 機動預覽
-  spike: { name:'尖錐', friction:0.72, damp:1.05, mob:0.3 },
+  spike: { name:'尖錐', friction:0.58, damp:1.05, mob:0.3 },
   dome:  { name:'半球', friction:1.0,  damp:0.62, mob:0.6 },
   flat:  { name:'平底', friction:1.2,  damp:0.34, mob:1.0 },
 };
@@ -368,10 +368,12 @@ const PH = {
   spinBase: 2.6,             // 基礎轉速衰減 (unit/s)
   moveCost: 0.004,           // 移動造成的轉速消耗
   restitution: 0.82,         // 陀螺間恢復係數
-  wallRest: 0.7,             // 撞牆恢復係數（彈性反彈）
-  ringOut: 300,              // 撞牆徑向速度超過此值 → 擊飛出場 (px/s)
+  burst: 4500,               // 攻擊爆發：命中瞬間沿法線的彈射力（依攻擊外形×轉速）
+  wallRest: 0.78,            // 撞牆恢復係數（彈性反彈）
+  wallSpinLoss: 0.012,       // 撞牆的轉速削減係數
+  ringOut: 385,              // 撞牆徑向速度超過此值 → 擊飛出場 (px/s)
   hitLoss: 0.03,             // 碰撞轉速損耗係數
-  hitMin: 30,                // 法向速度低於此值視為貼磨，不算一擊 (px/s)
+  hitMin: 25,                // 法向速度低於此值視為貼磨，不算一擊 (px/s)
   grip: 0.045,               // 轉速差切向抽擊係數
   stopSpin: 7,               // 低於此轉速 → 倒下
   maxTime: 75,               // 時間到 → 判定勝
@@ -426,8 +428,8 @@ function stepWorld(w, dt){
         t.x = nx*(ARENA_R-t.r); t.y = ny*(ARENA_R-t.r);
         if (vr > 0){
           t.vx -= (1+PH.wallRest)*vr*nx;  t.vy -= (1+PH.wallRest)*vr*ny;
-          t.spin -= Math.min(4, vr*0.008/t.iN);
-          if (vr > 60) w.events.push({type:'wall', x:t.x, y:t.y, power:vr});
+          t.spin -= Math.min(6, vr*PH.wallSpinLoss/t.iN);   // 撞牆輕微削轉
+          if (vr > 45) w.events.push({type:'wall', x:t.x, y:t.y, power:vr});
         }
       }
     }
@@ -452,11 +454,17 @@ function stepWorld(w, dt){
         const invM = 1/A.m + 1/B.m;
         // 法向衝量（外形攻擊係數放大撞擊）
         const atkBoost = 1 + 0.5*(A.stats.shape.attack + B.stats.shape.attack - 1.2);
-        const j = -(1+PH.restitution*Math.min(1.7,atkBoost)) * vn / invM;
+        const j = -(1+PH.restitution*Math.min(1.8,atkBoost)) * vn / invM;
         A.vx -= j*nx/A.m; A.vy -= j*ny/A.m;
         B.vx += j*nx/B.m; B.vy += j*ny/B.m;
         // 只有夠力的撞擊才算「一擊」：貼著磨的微碰撞只彈開、不咬轉速
         if (-vn > PH.hitMin){
+          // 攻擊爆發：旋轉的攻擊環把對手瞬間沿法線彈射出去（噴出去的爽感）
+          // 力道 = 對方攻擊外形 × 對方當前轉速；自身越重越不易被噴飛
+          const powA = B.stats.shape.attack * (0.45 + 0.55*B.spin/B.spin0); // A 承受 B 的爆發
+          const powB = A.stats.shape.attack * (0.45 + 0.55*A.spin/A.spin0); // B 承受 A 的爆發
+          A.vx -= nx*PH.burst*powA/A.m; A.vy -= ny*PH.burst*powA/A.m;       // A 往遠離 B 噴
+          B.vx += nx*PH.burst*powB/B.m; B.vy += ny*PH.burst*powB/B.m;       // B 往遠離 A 噴
           // 轉速差切向抽擊（三刃 grip 高，把對手甩偏）
           const tx = -ny, ty = nx;
           const surf = (A.spin*A.stats.shape.grip - B.spin*B.stats.shape.grip);
